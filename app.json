@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "OubliePas",
+    "slug": "OubliePas",
+    "version": "1.0.0",
+    "icon": "./assets/icon.png",
+    "extra": {
+      "eas": {
+        "projectId": "c09d1d00-d450-4784-bf9b-6341c5973f11"
+      }
+    },
+    "android": {
+      "package": "com.labeldia94.OubliePas",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c09d1d00-d450-4784-bf9b-6341c5973f11"
+    },
+    "ios": {}
+  }
+}
