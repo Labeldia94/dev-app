@@ -6,15 +6,16 @@ import {
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { db } from '../../firebaseConfig';
 import {
-  collection, addDoc, query, onSnapshot, orderBy, doc, getDoc,
+  collection, addDoc, query, onSnapshot, doc, getDoc,
   setDoc, deleteDoc, updateDoc, writeBatch, where,
-  documentId, limit, getDocs, startAt, endAt, deleteField,
+  documentId, limit, getDocs, startAt, endAt,
 } from 'firebase/firestore';
 import { RAYONS } from '../../constants/rayons';
-import { useFoyer } from '../../context/FoyerContext';
+import { useFoyer, List } from '../../context/FoyerContext';
 import { useAppTheme } from '../../hooks/use-app-theme';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const LIST_EMOJIS = ['🛒', '🏪', '🏠', '💊', '🔧', '🐾', '👶', '🎄', '🍕', '🧹', '🎁', '💪'];
 
 type ShoppingItem = {
   id: string;
@@ -24,13 +25,14 @@ type ShoppingItem = {
   category: string;
   completed: boolean;
   familyCode: string;
+  listId?: string;
   addedBy?: string;
 };
 
 type Suggestion = { id: string; category: string };
 
 export default function ShoppingScreen() {
-  const { activeCode, pushToken, loading, userName } = useFoyer();
+  const { activeCode, pushToken, loading, userName, lists, activeListId, setActiveListId, createList, deleteList } = useFoyer();
   const theme = useAppTheme();
 
   const [item, setItem] = useState('');
@@ -46,8 +48,20 @@ export default function ShoppingScreen() {
   const [editText, setEditText] = useState('');
   const [editQty, setEditQty] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  // Création de liste
+  const [createListModal, setCreateListModal] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [newListEmoji, setNewListEmoji] = useState('🛒');
+  const [savingList, setSavingList] = useState(false);
 
-  const filteredList = activeFilter ? list.filter(i => i.category === activeFilter) : list;
+  const filteredList = (activeFilter ? list.filter(i => i.category === activeFilter) : list)
+    .slice()
+    .sort((a, b) => {
+      if (a.completed !== b.completed) return Number(a.completed) - Number(b.completed);
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return a.text.localeCompare(b.text);
+    });
+
   const total = list.length;
   const achete = list.filter(i => i.completed).length;
   const progression = total > 0 ? (achete / total) * 100 : 0;
@@ -58,21 +72,20 @@ export default function ShoppingScreen() {
   }, 0);
   const hasBudget = list.some(i => i.price && i.price > 0);
 
-  // Ecoute la liste en temps réel
+  // Écoute la liste en temps réel (filtrée par listId)
   useEffect(() => {
-    if (!activeCode) return;
+    if (!activeCode || !activeListId) { setList([]); return; }
     const q = query(
       collection(db, 'shoppingList'),
       where('familyCode', '==', activeCode),
-      orderBy('category'),
-      orderBy('text')
+      where('listId', '==', activeListId),
     );
     return onSnapshot(q, snapshot => {
       setList(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ShoppingItem)));
     });
-  }, [activeCode]);
+  }, [activeCode, activeListId]);
 
-  // Autocomplete: recherche préfixe dans le dictionnaire (debounce 300ms)
+  // Autocomplete
   useEffect(() => {
     const prefix = item.trim().toLowerCase();
     if (prefix.length < 2) { setSuggestions([]); return; }
@@ -80,7 +93,7 @@ export default function ShoppingScreen() {
       try {
         const q = query(
           collection(db, 'dictionnaire'),
-          orderBy(documentId()),
+          documentId(),
           startAt(prefix),
           endAt(prefix + '\uf8ff'),
           limit(5)
@@ -115,11 +128,12 @@ export default function ShoppingScreen() {
         ),
       });
     } catch {
-      // Echec silencieux: les notifications sont optionnelles
+      // Echec silencieux
     }
   };
 
   const saveItem = async (category: string, overrideText?: string) => {
+    if (!activeListId || !activeCode) return;
     setSaving(true);
     try {
       if (editingItem) {
@@ -135,9 +149,29 @@ export default function ShoppingScreen() {
           return;
         }
         const cleanItem = rawText.trim().toLowerCase();
+        // Détection de doublon
+        const doublon = list.find(i => i.text === cleanItem);
+        if (doublon) {
+          Alert.alert(
+            'Article déjà présent',
+            `"${cleanItem}" est déjà dans la liste (x${doublon.quantity}). Voulez-vous augmenter la quantité ?`,
+            [
+              { text: 'Annuler', style: 'cancel' },
+              {
+                text: '+1', onPress: async () => {
+                  const newQty = (parseInt(doublon.quantity, 10) || 1) + qty;
+                  await updateDoc(doc(db, 'shoppingList', doublon.id), { quantity: newQty.toString() });
+                  setItem(''); setQuantity('1'); setPrice(''); setSuggestions([]);
+                }
+              },
+            ]
+          );
+          setSaving(false);
+          return;
+        }
         const data: Omit<ShoppingItem, 'id'> = {
           text: cleanItem, quantity: qty.toString(), category,
-          completed: false, familyCode: activeCode!,
+          completed: false, familyCode: activeCode, listId: activeListId,
           ...(userName ? { addedBy: userName } : {}),
         };
         if (price.trim()) {
@@ -182,6 +216,15 @@ export default function ShoppingScreen() {
     }
   };
 
+  const handleQuantityChange = async (id: string, currentQty: string, delta: number) => {
+    const next = Math.max(1, parseInt(currentQty || '1', 10) + delta);
+    try {
+      await updateDoc(doc(db, 'shoppingList', id), { quantity: next.toString() });
+    } catch {
+      Alert.alert('Erreur', 'Impossible de modifier la quantité.');
+    }
+  };
+
   const handleDelete = (id: string) => {
     Alert.alert(
       'Supprimer',
@@ -204,17 +247,14 @@ export default function ShoppingScreen() {
   const finishShopping = async () => {
     const checked = list.filter(i => i.completed);
     if (checked.length === 0) return;
-    // On prend les IDs à ce moment précis pour éviter la race condition
-    // avec le listener Firestore qui peut modifier `list` en cours de batch
-    const checkedIds = new Set(checked.map(i => i.id));
     try {
       const batch = writeBatch(db);
       const dateStr = new Date().toLocaleDateString('fr-FR');
       const createdAt = Date.now();
       checked.forEach(i => {
-        if (!checkedIds.has(i.id)) return;
         batch.set(doc(collection(db, 'historique')), {
-          text: i.text, category: i.category, date: dateStr, createdAt, familyCode: activeCode,
+          text: i.text, category: i.category, date: dateStr, createdAt,
+          familyCode: activeCode, listId: activeListId,
         });
         batch.delete(doc(db, 'shoppingList', i.id));
       });
@@ -256,6 +296,43 @@ export default function ShoppingScreen() {
     }
   };
 
+  const handleCreateList = async () => {
+    if (!newListName.trim()) {
+      Alert.alert('Erreur', 'Donnez un nom à la liste.');
+      return;
+    }
+    setSavingList(true);
+    try {
+      await createList(newListName.trim(), newListEmoji);
+      setCreateListModal(false);
+      setNewListName('');
+      setNewListEmoji('🛒');
+    } catch {
+      Alert.alert('Erreur', 'Impossible de créer la liste.');
+    } finally {
+      setSavingList(false);
+    }
+  };
+
+  const confirmDeleteList = (l: List) => {
+    if (lists.length === 1) {
+      Alert.alert('Impossible', 'Vous ne pouvez pas supprimer votre seule liste.');
+      return;
+    }
+    Alert.alert(
+      `Supprimer "${l.name}" ?`,
+      'Tous les articles de cette liste seront supprimés définitivement.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive', onPress: () => {
+            deleteList(l.id).catch(() => Alert.alert('Erreur', 'Impossible de supprimer la liste.'));
+          },
+        },
+      ]
+    );
+  };
+
   const renderRightActions = (id: string) => (
     <TouchableOpacity style={styles.swipeDelete} onPress={() => handleDelete(id)}>
       <Text style={styles.swipeDeleteText}>🗑 Supprimer</Text>
@@ -269,11 +346,106 @@ export default function ShoppingScreen() {
     </View>
   );
 
+  // Aucune liste créée — inviter à en créer une
+  if (lists.length === 0) return (
+    <View style={[styles.center, { backgroundColor: theme.bg }]}>
+      <Text style={{ fontSize: 48, marginBottom: 16 }}>🛒</Text>
+      <Text style={[styles.listTitle, { color: theme.text, marginBottom: 8 }]}>Aucune liste</Text>
+      <Text style={{ color: theme.subtext, textAlign: 'center', marginBottom: 24 }}>
+        Créez votre première liste pour commencer
+      </Text>
+      <TouchableOpacity
+        style={[styles.addButton, { paddingHorizontal: 32, paddingVertical: 16 }]}
+        onPress={() => setCreateListModal(true)}
+      >
+        <Text style={styles.addButtonText}>+ Créer une liste</Text>
+      </TouchableOpacity>
+      <Modal visible={createListModal} transparent animationType="slide">
+        {renderCreateListModal()}
+      </Modal>
+    </View>
+  );
+
+  function renderCreateListModal() {
+    return (
+      <View style={styles.editOverlay}>
+        <View style={[styles.editModal, { backgroundColor: theme.card }]}>
+          <Text style={[styles.editTitle, { color: theme.text }]}>Nouvelle liste</Text>
+          <TextInput
+            style={[styles.editInput, { backgroundColor: theme.bg, color: theme.text }]}
+            value={newListName}
+            onChangeText={setNewListName}
+            placeholder="Nom de la liste"
+            placeholderTextColor={theme.subtext}
+            autoFocus
+          />
+          {/* Sélection emoji */}
+          <Text style={[styles.emojiLabel, { color: theme.subtext }]}>Icône</Text>
+          <View style={styles.emojiGrid}>
+            {LIST_EMOJIS.map(e => (
+              <TouchableOpacity
+                key={e}
+                style={[styles.emojiBtn, newListEmoji === e && { backgroundColor: theme.tint + '30', borderColor: theme.tint, borderWidth: 2 }]}
+                onPress={() => setNewListEmoji(e)}
+              >
+                <Text style={styles.emojiBtnText}>{e}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[styles.editSaveBtn, savingList && { opacity: 0.6 }]}
+            onPress={handleCreateList}
+            disabled={savingList}
+          >
+            {savingList
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.editSaveBtnText}>Créer</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCreateListModal(false)} style={styles.editCancelBtn}>
+            <Text style={styles.editCancelText}>Annuler</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <Text style={[styles.listTitle, { color: theme.text }]}>
         {activeCode.charAt(0).toUpperCase() + activeCode.slice(1)}
       </Text>
+
+      {/* Sélecteur de listes */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.listTabsScroll}
+        contentContainerStyle={styles.listTabsContainer}
+      >
+        {lists.map(l => (
+          <TouchableOpacity
+            key={l.id}
+            style={[
+              styles.listTab,
+              { borderColor: theme.border },
+              activeListId === l.id && { backgroundColor: theme.tint, borderColor: theme.tint },
+            ]}
+            onPress={() => setActiveListId(l.id)}
+            onLongPress={() => confirmDeleteList(l)}
+          >
+            <Text style={[styles.listTabText, { color: activeListId === l.id ? '#fff' : theme.text }]}>
+              {l.emoji} {l.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity
+          style={[styles.listTab, styles.listTabNew, { borderColor: theme.border }]}
+          onPress={() => setCreateListModal(true)}
+        >
+          <Text style={[styles.listTabText, { color: theme.subtext }]}>+ Nouvelle</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       {/* Barre XP */}
       <View style={styles.mmorpgContainer}>
@@ -390,7 +562,7 @@ export default function ShoppingScreen() {
         </View>
       )}
 
-      {/* Liste (glisser gauche pour supprimer) */}
+      {/* Liste */}
       <FlatList
         data={filteredList}
         keyExtractor={i => i.id}
@@ -408,7 +580,7 @@ export default function ShoppingScreen() {
                     {RAYONS.find(r => r.id === item.category)?.label ?? 'DIVERS'}
                   </Text>
                   <Text style={[styles.itemText, { color: theme.text }, item.completed && styles.completedText]}>
-                    {item.text} (x{item.quantity})
+                    {item.text}
                   </Text>
                   {item.price ? (
                     <Text style={styles.priceTag}>{item.price.toFixed(2)} €</Text>
@@ -418,6 +590,21 @@ export default function ShoppingScreen() {
                   ) : null}
                 </View>
               </TouchableOpacity>
+              <View style={styles.qtyControls}>
+                <TouchableOpacity
+                  style={styles.qtyBtn}
+                  onPress={() => handleQuantityChange(item.id, item.quantity, -1)}
+                >
+                  <Text style={styles.qtyBtnText}>−</Text>
+                </TouchableOpacity>
+                <Text style={[styles.qtyValue, { color: theme.text }]}>{item.quantity}</Text>
+                <TouchableOpacity
+                  style={styles.qtyBtn}
+                  onPress={() => handleQuantityChange(item.id, item.quantity, +1)}
+                >
+                  <Text style={styles.qtyBtnText}>+</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ReanimatedSwipeable>
         )}
@@ -472,11 +659,16 @@ export default function ShoppingScreen() {
             <TouchableOpacity style={styles.editSaveBtn} onPress={saveEdit}>
               <Text style={styles.editSaveBtnText}>Enregistrer</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setEditModal(false)} style={styles.editCancelBtn}>
+            <TouchableOpacity onPress={() => { setEditModal(false); setEditingItem(null); }} style={styles.editCancelBtn}>
               <Text style={styles.editCancelText}>Annuler</Text>
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Modal création de liste */}
+      <Modal visible={createListModal} transparent animationType="slide">
+        {renderCreateListModal()}
       </Modal>
     </View>
   );
@@ -484,8 +676,15 @@ export default function ShoppingScreen() {
 
 const styles = StyleSheet.create({
   container:      { flex: 1, padding: 20, paddingTop: 60 },
-  listTitle:      { fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 15 },
+  listTitle:      { fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
   center:         { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Sélecteur de listes
+  listTabsScroll:     { maxHeight: 44, marginBottom: 12 },
+  listTabsContainer:  { paddingVertical: 2, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  listTab:            { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5 },
+  listTabNew:         { borderStyle: 'dashed' },
+  listTabText:        { fontSize: 13, fontWeight: '700' },
 
   // Barre XP
   mmorpgContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 5 },
@@ -535,6 +734,12 @@ const styles = StyleSheet.create({
   priceTag:       { fontSize: 14, color: '#8E8E93' },
   addedBy:        { fontSize: 11, color: '#8E8E93', marginTop: 2 },
 
+  // Contrôles quantité
+  qtyControls:    { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
+  qtyBtn:         { width: 28, height: 28, borderRadius: 14, backgroundColor: '#E5E5EA', justifyContent: 'center', alignItems: 'center' },
+  qtyBtnText:     { fontSize: 18, fontWeight: '700', color: '#1C1C1E', lineHeight: 22 },
+  qtyValue:       { fontSize: 16, fontWeight: '700', minWidth: 28, textAlign: 'center' },
+
   // Swipe suppression
   swipeDelete:     { backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', width: 110, marginBottom: 8, borderTopRightRadius: 12, borderBottomRightRadius: 12 },
   swipeDeleteText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
@@ -548,7 +753,7 @@ const styles = StyleSheet.create({
   finishBtn:      { backgroundColor: '#1C1C1E', padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
   finishBtnText:  { color: 'white', fontWeight: 'bold' },
 
-  // Modal édition
+  // Modal édition / création
   editOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   editModal:       { width: '100%', borderRadius: 20, padding: 20 },
   editTitle:       { fontSize: 18, fontWeight: '900', marginBottom: 16 },
@@ -559,4 +764,10 @@ const styles = StyleSheet.create({
   editSaveBtnText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   editCancelBtn:   { alignItems: 'center', padding: 10 },
   editCancelText:  { color: '#FF3B30', fontWeight: '600' },
+
+  // Emoji picker (création de liste)
+  emojiLabel:     { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  emojiGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  emojiBtn:       { width: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F2F7' },
+  emojiBtnText:   { fontSize: 22 },
 });

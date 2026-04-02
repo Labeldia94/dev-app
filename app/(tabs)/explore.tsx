@@ -7,7 +7,7 @@ import { useAppTheme } from '../../hooks/use-app-theme';
 import { RAYONS } from '../../constants/rayons';
 
 export default function HistoryScreen() {
-  const { activeCode } = useFoyer();
+  const { activeCode, activeListId } = useFoyer();
   const theme = useAppTheme();
 
   const [history, setHistory]       = useState([]);
@@ -16,6 +16,7 @@ export default function HistoryScreen() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [customQty, setCustomQty]   = useState('');
   const [activeTab, setActiveTab]   = useState<'historique' | 'stats'>('historique');
+  const [saving, setSaving]         = useState(false);
 
   useEffect(() => {
     if (!activeCode) { setLoading(false); return; }
@@ -76,9 +77,10 @@ export default function HistoryScreen() {
   };
 
   const reAddToList = async (qty) => {
-    if (!selectedItem) return;
+    if (!selectedItem || !activeListId || saving) return;
     const finalQty = qty ?? (customQty ? parseInt(customQty, 10) : null);
     if (!finalQty || isNaN(finalQty) || finalQty <= 0) return;
+    setSaving(true);
     try {
       await addDoc(collection(db, 'shoppingList'), {
         text: selectedItem.text,
@@ -86,11 +88,14 @@ export default function HistoryScreen() {
         quantity: finalQty.toString(),
         completed: false,
         familyCode: activeCode,
+        listId: activeListId,
       });
       setModalVisible(false);
       setCustomQty('');
     } catch {
       Alert.alert('Erreur', "Impossible d'ajouter l'article.");
+    } finally {
+      setSaving(false);
     }
   };
 

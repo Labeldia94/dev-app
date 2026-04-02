@@ -13,7 +13,9 @@ export default function FoyerScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem('foyers_history').then(list => {
-      if (list) setHistory(JSON.parse(list));
+      if (list) {
+        try { setHistory(JSON.parse(list)); } catch { /* données corrompues ignorées */ }
+      }
     });
   }, []);
 
