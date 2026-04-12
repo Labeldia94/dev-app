@@ -22,6 +22,19 @@
     "updates": {
       "url": "https://u.expo.dev/c09d1d00-d450-4784-bf9b-6341c5973f11"
     },
-    "ios": {}
+    "ios": {
+      "bundleIdentifier": "com.labeldia94.OubliePas",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.15738183686-u34p6k2b3duu5f5m6kcbomqaqs775sno"
+        }
+      ]
+    ]
   }
 }

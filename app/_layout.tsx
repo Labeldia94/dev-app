@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { FoyerProvider } from '../context/FoyerContext';
+import { AuthProvider } from '../context/AuthContext';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -22,9 +23,11 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <FoyerProvider>
-        <RootNavigatorWithRedirect />
-      </FoyerProvider>
+      <AuthProvider>
+        <FoyerProvider>
+          <RootNavigatorWithRedirect />
+        </FoyerProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }
@@ -32,9 +35,10 @@ export default function RootLayout() {
 function RootNavigatorWithRedirect() {
   return (
     <Stack>
-      <Stack.Screen name="index"      options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)"     options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="index"        options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)"       options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding"   options={{ headerShown: false }} />
+      <Stack.Screen name="mode-courses" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
     </Stack>
   );
 }

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>15738183686-98h4cu1crkie6f6btaj04hbs40r9imdo.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.15738183686-98h4cu1crkie6f6btaj04hbs40r9imdo</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>15738183686-r3vfkhuoa32tdm9tfgsmi8es921mvuar.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBs0lCBiurS01AH42NyrOn_Ut5jwXkFURY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>15738183686</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.labeldia94.OubliePas</string>
+	<key>PROJECT_ID</key>
+	<string>oubliepas-5650f</string>
+	<key>STORAGE_BUCKET</key>
+	<string>oubliepas-5650f.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:15738183686:ios:ea7f793aee0a49830b2387</string>
+</dict>
+</plist>

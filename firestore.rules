@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isFoyerMember(foyerCode) {
+      let foyer    = get(/databases/$(database)/documents/foyers/$(foyerCode)).data;
+      let userDoc  = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return isSignedIn() && (
+        foyer.ownerUid == request.auth.uid ||
+        ('memberUids' in foyer && request.auth.uid in foyer.memberUids) ||
+        ('foyerCodes' in userDoc && userDoc.foyerCodes.hasAny([foyerCode]))
+      );
+    }
+
+    // ── Utilisateurs ─────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ── Foyers ───────────────────────────────────────────────────────────────
+    match /foyers/{foyerCode} {
+      allow read:   if isFoyerMember(foyerCode);
+      allow create: if isSignedIn();
+      allow update: if isFoyerMember(foyerCode);
+      allow delete: if isSignedIn()
+                    && get(/databases/$(database)/documents/foyers/$(foyerCode)).data.ownerUid == request.auth.uid;
+    }
+
+    // ── Invitations ──────────────────────────────────────────────────────────
+    match /invitations/{inviteId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn()
+                    && isFoyerMember(request.resource.data.foyerCode);
+      allow update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // ── Listes (sous-listes d'un foyer) ──────────────────────────────────────
+    match /lists/{listId} {
+      allow read:   if isFoyerMember(resource.data.foyerCode);
+      allow create: if isSignedIn()
+                    && isFoyerMember(request.resource.data.foyerCode);
+      allow update: if isFoyerMember(resource.data.foyerCode);
+      allow delete: if isFoyerMember(resource.data.foyerCode);
+    }
+
+    // ── Articles de courses ───────────────────────────────────────────────────
+    match /shoppingList/{itemId} {
+      allow read:   if isFoyerMember(resource.data.familyCode);
+      allow create: if isSignedIn()
+                    && isFoyerMember(request.resource.data.familyCode);
+      allow update: if isFoyerMember(resource.data.familyCode);
+      allow delete: if isFoyerMember(resource.data.familyCode);
+    }
+
+    // ── Historique ───────────────────────────────────────────────────────────
+    match /historique/{docId} {
+      allow read:   if isFoyerMember(resource.data.familyCode);
+      allow create: if isSignedIn()
+                    && isFoyerMember(request.resource.data.familyCode);
+      allow delete: if isFoyerMember(resource.data.familyCode);
+      allow update: if false;
+    }
+
+    // ── Dictionnaire (partagé en lecture, écriture si connecté) ──────────────
+    match /dictionnaire/{word} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ── Tickets de caisse ────────────────────────────────────────────────────
+    match /receipts/{receiptId} {
+      allow read:   if isFoyerMember(resource.data.familyCode);
+      allow create: if isSignedIn()
+                    && isFoyerMember(request.resource.data.familyCode);
+      allow delete: if isFoyerMember(resource.data.familyCode);
+      allow update: if false;
+    }
+
+    // ── Tokens de notification ────────────────────────────────────────────────
+    match /notifTokens/{token} {
+      allow read:   if isSignedIn();
+      allow write:  if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+  }
+}

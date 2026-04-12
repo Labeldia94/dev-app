@@ -1,0 +1,48 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "shoppingList",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyCode", "order": "ASCENDING" },
+        { "fieldPath": "listId",     "order": "ASCENDING" },
+        { "fieldPath": "category",   "order": "ASCENDING" },
+        { "fieldPath": "text",       "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shoppingList",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyCode", "order": "ASCENDING" },
+        { "fieldPath": "category",   "order": "ASCENDING" },
+        { "fieldPath": "text",       "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "foyerCode",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt",  "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "receipts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyCode", "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "historique",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyCode", "order": "ASCENDING" },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

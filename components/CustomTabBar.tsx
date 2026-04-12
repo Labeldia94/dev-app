@@ -9,6 +9,7 @@ const TABS = [
   { name: 'foyer',   label: 'Foyer',      iconActive: 'people'           as const, iconInactive: 'people-outline'           as const },
   { name: 'index',   label: 'Courses',    iconActive: 'cart'             as const, iconInactive: 'cart-outline'             as const },
   { name: 'explore', label: 'Historique', iconActive: 'document-text'    as const, iconInactive: 'document-text-outline'    as const },
+  { name: 'compte',  label: 'Compte',     iconActive: 'person-circle'    as const, iconInactive: 'person-circle-outline'    as const },
 ];
 
 export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
