@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "15738183686",
+    "project_id": "oubliepas-5650f",
+    "storage_bucket": "oubliepas-5650f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:15738183686:android:a902cf929444f54c0b2387",
+        "android_client_info": {
+          "package_name": "com.labeldia94.OubliePas"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "15738183686-r3vfkhuoa32tdm9tfgsmi8es921mvuar.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.labeldia94.OubliePas",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "15738183686-u34p6k2b3duu5f5m6kcbomqaqs775sno.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbi6mv94hZraSlsZEmg9m4XGRfyZCjRa0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "15738183686-u34p6k2b3duu5f5m6kcbomqaqs775sno.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "15738183686-98h4cu1crkie6f6btaj04hbs40r9imdo.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.labeldia94.OubliePas"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

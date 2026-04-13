@@ -9,6 +9,7 @@ import {
   query, where, getDocs, onSnapshot, deleteDoc, arrayUnion, arrayRemove, orderBy,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { logError } from '../utils/crashlytics';
 
 const PROJECT_ID = 'c09d1d00-d450-4784-bf9b-6341c5973f11';
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -173,14 +174,18 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
 
       // Ajoute un listener temps réel pour chaque nouveau foyer
       codes.filter(c => !foyerUnsubs.has(c)).forEach(code => {
-        const unsub = onSnapshot(doc(db, 'foyers', code), snap => {
-          if (snap.exists()) foyerMap.set(code, snap.data() as FoyerDoc);
-          else foyerMap.delete(code);
-          setMyFoyers(currentCodes.filter(c => foyerMap.has(c)).map(c => foyerMap.get(c)!));
-        });
+        const unsub = onSnapshot(
+          doc(db, 'foyers', code),
+          snap => {
+            if (snap.exists()) foyerMap.set(code, snap.data() as FoyerDoc);
+            else foyerMap.delete(code);
+            setMyFoyers(currentCodes.filter(c => foyerMap.has(c)).map(c => foyerMap.get(c)!));
+          },
+          err => logError(err, 'onSnapshot:foyer'),
+        );
         foyerUnsubs.set(code, unsub);
       });
-    });
+    }, err => logError(err, 'onSnapshot:users'));
 
     return () => {
       userUnsub();
@@ -191,9 +196,11 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
   // Écoute le document foyer actif en temps réel
   useEffect(() => {
     if (!activeCode || !currentUid) { setCurrentFoyer(null); return; }
-    return onSnapshot(doc(db, 'foyers', activeCode), snap => {
-      setCurrentFoyer(snap.exists() ? (snap.data() as FoyerDoc) : null);
-    });
+    return onSnapshot(
+      doc(db, 'foyers', activeCode),
+      snap => { setCurrentFoyer(snap.exists() ? (snap.data() as FoyerDoc) : null); },
+      err => logError(err, 'onSnapshot:currentFoyer'),
+    );
   }, [activeCode, currentUid]);
 
   // Écoute les listes du foyer actif en temps réel
@@ -204,15 +211,19 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
       where('foyerCode', '==', activeCode),
       orderBy('createdAt'),
     );
-    return onSnapshot(q, snap => {
-      const lists = snap.docs.map(d => ({ id: d.id, ...d.data() } as FoyerList));
-      setFoyerLists(lists);
-      // Sélectionne automatiquement la première liste si aucune n'est sélectionnée
-      setActiveListId(prev => {
-        if (prev && lists.some(l => l.id === prev)) return prev;
-        return lists.length > 0 ? lists[0].id : null;
-      });
-    });
+    return onSnapshot(
+      q,
+      snap => {
+        const lists = snap.docs.map(d => ({ id: d.id, ...d.data() } as FoyerList));
+        setFoyerLists(lists);
+        // Sélectionne automatiquement la première liste si aucune n'est sélectionnée
+        setActiveListId(prev => {
+          if (prev && lists.some(l => l.id === prev)) return prev;
+          return lists.length > 0 ? lists[0].id : null;
+        });
+      },
+      err => logError(err, 'onSnapshot:foyerLists'),
+    );
   }, [activeCode, currentUid]);
 
   // Enregistre le token push dans Firestore

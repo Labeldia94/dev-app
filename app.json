@@ -64,6 +64,14 @@
     },
     "plugins": [
       [
+        "@react-native-firebase/app",
+        {
+          "android": { "googleServicesFile": "./google-services.json" },
+          "ios":     { "googleServicesFile": "./GoogleService-Info.plist" }
+        }
+      ],
+      ["@react-native-firebase/crashlytics"],
+      [
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.15738183686-u34p6k2b3duu5f5m6kcbomqaqs775sno"

@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { FoyerProvider } from '../context/FoyerContext';
 import { AuthProvider } from '../context/AuthContext';
+import { logError } from '../utils/crashlytics';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -16,19 +17,43 @@ Notifications.setNotificationHandler({
   }),
 });
 
+type ErrorBoundaryState = { hasError: boolean };
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error): void {
+    logError(error, 'ErrorBoundary');
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ ...Ionicons.font });
 
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <FoyerProvider>
-          <RootNavigatorWithRedirect />
-        </FoyerProvider>
-      </AuthProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AuthProvider>
+          <FoyerProvider>
+            <RootNavigatorWithRedirect />
+          </FoyerProvider>
+        </AuthProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 
