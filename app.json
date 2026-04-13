@@ -15,7 +15,9 @@
     "extra": {
       "eas": {
         "projectId": "c09d1d00-d450-4784-bf9b-6341c5973f11"
-      }
+      },
+      "privacyPolicyUrl": "https://labeldia94.github.io/dev-app/privacy-policy.html",
+      "supportEmail": "imadeddine2b@gmail.com"
     },
     "ios": {
       "bundleIdentifier": "com.labeldia94.OubliePas",
