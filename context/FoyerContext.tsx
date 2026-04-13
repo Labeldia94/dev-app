@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { db, auth } from '../firebaseConfig';
 import {
   doc, setDoc, getDoc, addDoc, collection, updateDoc,
-  query, where, getDocs, onSnapshot, deleteDoc, arrayUnion, arrayRemove, orderBy,
+  query, where, getDocs, onSnapshot, deleteDoc, arrayUnion, arrayRemove, orderBy, writeBatch,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { logError } from '../utils/crashlytics';
@@ -77,6 +77,7 @@ type FoyerContextType = {
   rejectInvitation: (inviteId: string) => Promise<void>;
   removeMember: (memberUid: string) => Promise<void>;
   leaveFoyer: () => Promise<void>;
+  deleteFoyer: (foyerCode: string) => Promise<void>;
   // Listes
   foyerLists: FoyerList[];
   activeListId: string | null;
@@ -105,6 +106,7 @@ const FoyerContext = createContext<FoyerContextType>({
   rejectInvitation: async () => {},
   removeMember: async () => {},
   leaveFoyer: async () => {},
+  deleteFoyer: async () => {},
   foyerLists: [],
   activeListId: null,
   setActiveListId: () => {},
@@ -387,6 +389,47 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
     await updateActiveCode(null);
   };
 
+  const deleteFoyer = async (foyerCode: string): Promise<void> => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Non connecté');
+
+    const foyerSnap = await getDoc(doc(db, 'foyers', foyerCode));
+    if (!foyerSnap.exists()) return;
+    const foyerData = foyerSnap.data() as FoyerDoc;
+    if (foyerData.ownerUid !== user.uid) throw new Error('NOT_OWNER');
+
+    // Supprimer tous les articles de la liste
+    const itemsSnap = await getDocs(query(
+      collection(db, 'shoppingList'),
+      where('familyCode', '==', foyerCode),
+    ));
+    if (itemsSnap.docs.length > 0) {
+      const b = writeBatch(db);
+      itemsSnap.docs.forEach(d => b.delete(d.ref));
+      await b.commit();
+    }
+
+    // Supprimer toutes les listes
+    const listsSnap = await getDocs(query(
+      collection(db, 'lists'),
+      where('foyerCode', '==', foyerCode),
+    ));
+    if (listsSnap.docs.length > 0) {
+      const b = writeBatch(db);
+      listsSnap.docs.forEach(d => b.delete(d.ref));
+      await b.commit();
+    }
+
+    // Retirer le foyer de tous les membres + supprimer le document foyer
+    const memberUids: string[] = (foyerData as any).memberUids ?? foyerData.members.map(m => m.uid);
+    const b = writeBatch(db);
+    memberUids.forEach(uid => b.update(doc(db, 'users', uid), { foyerCodes: arrayRemove(foyerCode) }));
+    b.delete(doc(db, 'foyers', foyerCode));
+    await b.commit();
+
+    if (activeCode === foyerCode) await updateActiveCode(null);
+  };
+
   // ─── Notifications ─────────────────────────────────────────────────────────
 
   const registerForNotifications = async () => {
@@ -429,7 +472,7 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
       isDark, toggleDarkMode,
       notificationsEnabled, toggleNotifications,
       currentFoyer, myFoyers, createFoyer, generateInviteCode, lookupInviteCode,
-      acceptInvitation, rejectInvitation, removeMember, leaveFoyer,
+      acceptInvitation, rejectInvitation, removeMember, leaveFoyer, deleteFoyer,
       foyerLists, activeListId, setActiveListId, createList, deleteList,
     }}>
       {children}

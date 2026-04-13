@@ -13,7 +13,7 @@ export default function FoyerScreen() {
     activeCode, updateActiveCode,
     currentFoyer, myFoyers,
     userName, createFoyer, generateInviteCode, lookupInviteCode,
-    acceptInvitation, rejectInvitation, removeMember, leaveFoyer,
+    acceptInvitation, rejectInvitation, removeMember, leaveFoyer, deleteFoyer,
   } = useFoyer();
   const theme = useAppTheme();
   const currentUid = auth.currentUser?.uid;
@@ -130,6 +130,27 @@ export default function FoyerScreen() {
           text: 'Retirer', style: 'destructive', onPress: async () => {
             if (activeCode !== foyer.code) await updateActiveCode(foyer.code);
             await removeMember(member.uid);
+          },
+        },
+      ]
+    );
+  };
+
+  // ─── Supprimer un foyer ───────────────────────────────────────────────────
+  const handleDelete = (foyer: FoyerDoc) => {
+    Alert.alert(
+      'Supprimer le foyer',
+      `Supprimer "${foyer.name}" définitivement ?\n\nToutes les listes et articles seront supprimés pour tous les membres.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive', onPress: async () => {
+            try {
+              await deleteFoyer(foyer.code);
+              setDetailFoyer(null);
+            } catch {
+              Alert.alert('Erreur', 'Impossible de supprimer ce foyer.');
+            }
           },
         },
       ]
@@ -290,6 +311,15 @@ export default function FoyerScreen() {
                     >
                       <Ionicons name="exit-outline" size={16} color="#FF3B30" />
                       <Text style={[styles.actionBtnText, { color: '#FF3B30' }]}>Quitter</Text>
+                    </TouchableOpacity>
+                  )}
+                  {isOwner && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: '#FF3B3015' }]}
+                      onPress={() => handleDelete(foyer)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                      <Text style={[styles.actionBtnText, { color: '#FF3B30' }]}>Supprimer</Text>
                     </TouchableOpacity>
                   )}
                 </View>
