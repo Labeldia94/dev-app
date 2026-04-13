@@ -3,18 +3,56 @@
     "name": "OubliePas",
     "slug": "OubliePas",
     "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "oubliepas",
     "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "extra": {
       "eas": {
         "projectId": "c09d1d00-d450-4784-bf9b-6341c5973f11"
       }
     },
+    "ios": {
+      "bundleIdentifier": "com.labeldia94.OubliePas",
+      "supportsTablet": false,
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "OubliePas utilise votre bibliothèque photo pour ajouter une photo de profil et scanner vos tickets de caisse.",
+        "NSPhotoLibraryAddUsageDescription": "OubliePas peut enregistrer des photos dans votre bibliothèque.",
+        "NSCameraUsageDescription": "OubliePas utilise votre caméra pour prendre une photo de profil et scanner vos tickets de caisse.",
+        "NSLocalNetworkUsageDescription": "OubliePas utilise le réseau local pour se connecter à Firebase en développement."
+      }
+    },
     "android": {
       "package": "com.labeldia94.OubliePas",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -22,17 +60,27 @@
     "updates": {
       "url": "https://u.expo.dev/c09d1d00-d450-4784-bf9b-6341c5973f11"
     },
-    "ios": {
-      "bundleIdentifier": "com.labeldia94.OubliePas",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
     "plugins": [
       [
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.15738183686-u34p6k2b3duu5f5m6kcbomqaqs775sno"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "OubliePas utilise votre bibliothèque photo pour ajouter une photo de profil et scanner vos tickets de caisse.",
+          "cameraPermission": "OubliePas utilise votre caméra pour prendre une photo de profil et scanner vos tickets de caisse."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#34C759",
+          "androidMode": "default",
+          "androidCollapsedTitle": "OubliePas"
         }
       ]
     ]

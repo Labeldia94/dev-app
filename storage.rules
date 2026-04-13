@@ -2,13 +2,18 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /receipts/{foyerCode}/{fileName} {
-      allow read:  if request.auth != null;
+      // Seuls les membres du foyer peuvent lire/écrire leurs tickets
+      allow read:  if request.auth != null
+                   && request.auth.token.foyerCode == foyerCode;
       allow write: if request.auth != null
+                   && request.auth.token.foyerCode == foyerCode
                    && request.resource.size < 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }
     match /profilePhotos/{userId} {
+      // Lecture publique pour les membres authentifiés (photo de profil visible par le foyer)
       allow read:  if request.auth != null;
+      // Écriture uniquement par le propriétaire
       allow write: if request.auth != null
                    && request.auth.uid == userId
                    && request.resource.size < 2 * 1024 * 1024
