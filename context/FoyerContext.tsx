@@ -78,6 +78,7 @@ type FoyerContextType = {
   removeMember: (memberUid: string) => Promise<void>;
   leaveFoyer: () => Promise<void>;
   deleteFoyer: (foyerCode: string) => Promise<void>;
+  renameFoyer: (foyerCode: string, newName: string) => Promise<void>;
   // Listes
   foyerLists: FoyerList[];
   activeListId: string | null;
@@ -107,6 +108,7 @@ const FoyerContext = createContext<FoyerContextType>({
   removeMember: async () => {},
   leaveFoyer: async () => {},
   deleteFoyer: async () => {},
+  renameFoyer: async () => {},
   foyerLists: [],
   activeListId: null,
   setActiveListId: () => {},
@@ -430,6 +432,12 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
     if (activeCode === foyerCode) await updateActiveCode(null);
   };
 
+  const renameFoyer = async (foyerCode: string, newName: string): Promise<void> => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Non connecté');
+    await updateDoc(doc(db, 'foyers', foyerCode), { name: newName.trim() });
+  };
+
   // ─── Notifications ─────────────────────────────────────────────────────────
 
   const registerForNotifications = async () => {
@@ -472,7 +480,7 @@ export function FoyerProvider({ children }: { children: React.ReactNode }) {
       isDark, toggleDarkMode,
       notificationsEnabled, toggleNotifications,
       currentFoyer, myFoyers, createFoyer, generateInviteCode, lookupInviteCode,
-      acceptInvitation, rejectInvitation, removeMember, leaveFoyer, deleteFoyer,
+      acceptInvitation, rejectInvitation, removeMember, leaveFoyer, deleteFoyer, renameFoyer,
       foyerLists, activeListId, setActiveListId, createList, deleteList,
     }}>
       {children}

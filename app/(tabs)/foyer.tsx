@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ScrollView, Share, Modal, ActivityIndicator, Clipboard,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebaseConfig';
 import { useFoyer, FoyerDoc, FoyerMember, InvitePreview } from '../../context/FoyerContext';
@@ -13,16 +14,24 @@ export default function FoyerScreen() {
     activeCode, updateActiveCode,
     currentFoyer, myFoyers,
     userName, createFoyer, generateInviteCode, lookupInviteCode,
-    acceptInvitation, rejectInvitation, removeMember, leaveFoyer, deleteFoyer,
+    acceptInvitation, rejectInvitation, removeMember, leaveFoyer,
+    deleteFoyer, renameFoyer,
   } = useFoyer();
   const theme = useAppTheme();
   const currentUid = auth.currentUser?.uid;
+
+  // ── Refs swipeables (pour fermer après action) ──
+  const swipeRefs = useRef<Record<string, Swipeable | null>>({});
 
   // ── Modals ──
   const [createModal, setCreateModal]   = useState(false);
   const [joinModal, setJoinModal]       = useState(false);
   const [inviteModal, setInviteModal]   = useState(false);
   const [detailFoyer, setDetailFoyer]   = useState<FoyerDoc | null>(null);
+  const [renameModal, setRenameModal]   = useState(false);
+  const [renamingFoyer, setRenamingFoyer] = useState<FoyerDoc | null>(null);
+  const [renameInput, setRenameInput]   = useState('');
+  const [renaming, setRenaming]         = useState(false);
 
   // ── Formulaires ──
   const [foyerName, setFoyerName]         = useState('');
@@ -30,13 +39,17 @@ export default function FoyerScreen() {
   const [generatedCode, setGeneratedCode] = useState('');
 
   // ── Chargements ──
-  const [creating, setCreating]   = useState(false);
-  const [looking, setLooking]     = useState(false);
+  const [creating, setCreating]     = useState(false);
+  const [looking, setLooking]       = useState(false);
   const [generating, setGenerating] = useState(false);
 
   // ── Invitation preview ──
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [accepting, setAccepting]         = useState(false);
+
+  const closeAllSwipes = () => {
+    Object.values(swipeRefs.current).forEach(ref => ref?.close());
+  };
 
   // ─── Créer un foyer ────────────────────────────────────────────────────────
   const handleCreate = async () => {
@@ -51,6 +64,50 @@ export default function FoyerScreen() {
     } finally {
       setCreating(false);
     }
+  };
+
+  // ─── Renommer un foyer ─────────────────────────────────────────────────────
+  const openRename = (foyer: FoyerDoc) => {
+    closeAllSwipes();
+    setRenamingFoyer(foyer);
+    setRenameInput(foyer.name);
+    setRenameModal(true);
+  };
+
+  const handleRename = async () => {
+    if (!renamingFoyer || !renameInput.trim()) return;
+    setRenaming(true);
+    try {
+      await renameFoyer(renamingFoyer.code, renameInput.trim());
+      setRenameModal(false);
+      setRenamingFoyer(null);
+    } catch {
+      Alert.alert('Erreur', 'Impossible de renommer le foyer.');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  // ─── Supprimer un foyer ───────────────────────────────────────────────────
+  const handleDelete = (foyer: FoyerDoc) => {
+    closeAllSwipes();
+    Alert.alert(
+      'Supprimer le foyer',
+      `Supprimer "${foyer.name}" définitivement ?\n\nToutes les listes et articles seront supprimés pour tous les membres.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive', onPress: async () => {
+            try {
+              await deleteFoyer(foyer.code);
+              setDetailFoyer(null);
+            } catch {
+              Alert.alert('Erreur', 'Impossible de supprimer ce foyer.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ─── Chercher une invitation ───────────────────────────────────────────────
@@ -97,7 +154,6 @@ export default function FoyerScreen() {
 
   // ─── Générer un code d'invitation ─────────────────────────────────────────
   const handleGenerateInvite = async (foyer: FoyerDoc) => {
-    // Active ce foyer si pas encore actif
     if (activeCode !== foyer.code) await updateActiveCode(foyer.code);
     setGenerating(true);
     try {
@@ -136,27 +192,6 @@ export default function FoyerScreen() {
     );
   };
 
-  // ─── Supprimer un foyer ───────────────────────────────────────────────────
-  const handleDelete = (foyer: FoyerDoc) => {
-    Alert.alert(
-      'Supprimer le foyer',
-      `Supprimer "${foyer.name}" définitivement ?\n\nToutes les listes et articles seront supprimés pour tous les membres.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer', style: 'destructive', onPress: async () => {
-            try {
-              await deleteFoyer(foyer.code);
-              setDetailFoyer(null);
-            } catch {
-              Alert.alert('Erreur', 'Impossible de supprimer ce foyer.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
   // ─── Quitter un foyer ─────────────────────────────────────────────────────
   const handleLeave = (foyer: FoyerDoc) => {
     Alert.alert(
@@ -180,6 +215,33 @@ export default function FoyerScreen() {
           },
         },
       ]
+    );
+  };
+
+  // ─── Actions swipe ─────────────────────────────────────────────────────────
+  const renderLeftActions = (foyer: FoyerDoc, isOwner: boolean) => {
+    if (!isOwner) return null;
+    return (
+      <TouchableOpacity
+        style={styles.swipeRight}
+        onPress={() => openRename(foyer)}
+      >
+        <Ionicons name="pencil" size={22} color="#fff" />
+        <Text style={styles.swipeLabel}>Renommer</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderRightActions = (foyer: FoyerDoc, isOwner: boolean) => {
+    if (!isOwner) return null;
+    return (
+      <TouchableOpacity
+        style={styles.swipeLeft}
+        onPress={() => handleDelete(foyer)}
+      >
+        <Ionicons name="trash" size={22} color="#fff" />
+        <Text style={styles.swipeLabel}>Supprimer</Text>
+      </TouchableOpacity>
     );
   };
 
@@ -222,6 +284,9 @@ export default function FoyerScreen() {
     <ScrollView style={[styles.container, { backgroundColor: theme.bg }]} contentContainerStyle={styles.scrollContent}>
 
       <Text style={[styles.pageTitle, { color: theme.text }]}>Mes Foyers</Text>
+      <Text style={[styles.pageSub, { color: theme.subtext }]}>
+        Glisse à droite pour renommer · à gauche pour supprimer
+      </Text>
 
       {myFoyers.filter(f => f?.code && f?.name).map(foyer => {
         const members    = foyer.members ?? [];
@@ -230,102 +295,102 @@ export default function FoyerScreen() {
         const isExpanded = detailFoyer?.code === foyer.code;
 
         return (
-          <View key={foyer.code} style={[styles.foyerCard, { backgroundColor: theme.card, borderWidth: 2, borderColor: isActive ? theme.tint : theme.border }]}>
+          <Swipeable
+            key={foyer.code}
+            ref={ref => { swipeRefs.current[foyer.code] = ref; }}
+            renderLeftActions={() => renderLeftActions(foyer, isOwner)}
+            renderRightActions={() => renderRightActions(foyer, isOwner)}
+            overshootLeft={false}
+            overshootRight={false}
+          >
+            <View style={[styles.foyerCard, { backgroundColor: theme.card, borderWidth: 2, borderColor: isActive ? theme.tint : theme.border }]}>
 
-            {/* En-tête carte */}
-            <TouchableOpacity
-              style={styles.cardHeader}
-              onPress={() => setDetailFoyer(isExpanded ? null : foyer)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.foyerIconBox, { backgroundColor: isActive ? theme.tint : theme.border }]}>
-                <Ionicons name="home" size={20} color={isActive ? '#fff' : theme.subtext} />
-              </View>
-              <View style={styles.cardHeaderText}>
-                <Text style={[styles.foyerName, { color: theme.text }]}>{foyer.name}</Text>
-                <Text style={[styles.foyerMeta, { color: theme.subtext }]}>
-                  {members.length} membre{members.length > 1 ? 's' : ''}
-                  {isOwner ? ' · Propriétaire' : ''}
-                </Text>
-              </View>
-              {isActive ? (
-                <View style={[styles.activeBadge, { backgroundColor: theme.tint }]}>
-                  <Text style={styles.activeBadgeText}>ACTIF</Text>
+              {/* En-tête carte */}
+              <TouchableOpacity
+                style={styles.cardHeader}
+                onPress={() => setDetailFoyer(isExpanded ? null : foyer)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.foyerIconBox, { backgroundColor: isActive ? theme.tint : theme.border }]}>
+                  <Ionicons name="home" size={20} color={isActive ? '#fff' : theme.subtext} />
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.switchBtn, { borderColor: theme.tint }]}
-                  onPress={() => updateActiveCode(foyer.code)}
-                >
-                  <Text style={[styles.switchBtnText, { color: theme.tint }]}>Activer</Text>
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-
-            {/* Détail dépliable */}
-            {isExpanded && (
-              <View style={[styles.detail, { borderTopColor: theme.border }]}>
-
-                {/* Membres */}
-                <Text style={[styles.detailLabel, { color: theme.subtext }]}>MEMBRES</Text>
-                {members.map((member, i) => {
-                  const isMe = member.uid === currentUid;
-                  const isMemberOwner = member.uid === foyer.ownerUid;
-                  const initials = (member.name ?? '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
-                  return (
-                    <View
-                      key={member.uid}
-                      style={[styles.memberRow, i < members.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }]}
-                    >
-                      <View style={[styles.memberAvatar, { backgroundColor: isMemberOwner ? theme.tint : '#8E8E93' }]}>
-                        <Text style={styles.memberInitials}>{initials}</Text>
-                      </View>
-                      <Text style={[styles.memberName, { color: theme.text }]}>
-                        {member.name}{isMe ? ' (moi)' : ''}{isMemberOwner ? ' 👑' : ''}
-                      </Text>
-                      {isOwner && !isMe && (
-                        <TouchableOpacity onPress={() => handleRemove(member, foyer)}>
-                          <Ionicons name="close-circle" size={20} color="#FF3B30" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  );
-                })}
-
-                {/* Actions */}
-                <View style={styles.cardActions}>
+                <View style={styles.cardHeaderText}>
+                  <Text style={[styles.foyerName, { color: theme.text }]}>{foyer.name}</Text>
+                  <Text style={[styles.foyerMeta, { color: theme.subtext }]}>
+                    {members.length} membre{members.length > 1 ? 's' : ''}
+                    {isOwner ? ' · Propriétaire' : ''}
+                  </Text>
+                </View>
+                {isActive ? (
+                  <View style={[styles.activeBadge, { backgroundColor: theme.tint }]}>
+                    <Text style={styles.activeBadgeText}>ACTIF</Text>
+                  </View>
+                ) : (
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: theme.tint }]}
-                    onPress={() => handleGenerateInvite(foyer)}
-                    disabled={generating}
+                    style={[styles.switchBtn, { borderColor: theme.tint }]}
+                    onPress={() => updateActiveCode(foyer.code)}
                   >
-                    {generating
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <><Ionicons name="person-add" size={16} color="#fff" /><Text style={styles.actionBtnText}>Inviter</Text></>
-                    }
+                    <Text style={[styles.switchBtnText, { color: theme.tint }]}>Activer</Text>
                   </TouchableOpacity>
-                  {!isOwner && (
+                )}
+              </TouchableOpacity>
+
+              {/* Détail dépliable */}
+              {isExpanded && (
+                <View style={[styles.detail, { borderTopColor: theme.border }]}>
+
+                  {/* Membres */}
+                  <Text style={[styles.detailLabel, { color: theme.subtext }]}>MEMBRES</Text>
+                  {members.map((member, i) => {
+                    const isMe = member.uid === currentUid;
+                    const isMemberOwner = member.uid === foyer.ownerUid;
+                    const initials = (member.name ?? '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
+                    return (
+                      <View
+                        key={member.uid}
+                        style={[styles.memberRow, i < members.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }]}
+                      >
+                        <View style={[styles.memberAvatar, { backgroundColor: isMemberOwner ? theme.tint : '#8E8E93' }]}>
+                          <Text style={styles.memberInitials}>{initials}</Text>
+                        </View>
+                        <Text style={[styles.memberName, { color: theme.text }]}>
+                          {member.name}{isMe ? ' (moi)' : ''}{isMemberOwner ? ' 👑' : ''}
+                        </Text>
+                        {isOwner && !isMe && (
+                          <TouchableOpacity onPress={() => handleRemove(member, foyer)}>
+                            <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
+
+                  {/* Actions */}
+                  <View style={styles.cardActions}>
                     <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: '#FF3B3015' }]}
-                      onPress={() => handleLeave(foyer)}
+                      style={[styles.actionBtn, { backgroundColor: theme.tint }]}
+                      onPress={() => handleGenerateInvite(foyer)}
+                      disabled={generating}
                     >
-                      <Ionicons name="exit-outline" size={16} color="#FF3B30" />
-                      <Text style={[styles.actionBtnText, { color: '#FF3B30' }]}>Quitter</Text>
+                      {generating
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <><Ionicons name="person-add" size={16} color="#fff" /><Text style={styles.actionBtnText}>Inviter</Text></>
+                      }
                     </TouchableOpacity>
-                  )}
-                  {isOwner && (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: '#FF3B3015' }]}
-                      onPress={() => handleDelete(foyer)}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#FF3B30" />
-                      <Text style={[styles.actionBtnText, { color: '#FF3B30' }]}>Supprimer</Text>
-                    </TouchableOpacity>
-                  )}
+                    {!isOwner && (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: '#FF3B3015' }]}
+                        onPress={() => handleLeave(foyer)}
+                      >
+                        <Ionicons name="exit-outline" size={16} color="#FF3B30" />
+                        <Text style={[styles.actionBtnText, { color: '#FF3B30' }]}>Quitter</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
-          </View>
+              )}
+            </View>
+          </Swipeable>
         );
       })}
 
@@ -348,6 +413,7 @@ export default function FoyerScreen() {
 
       {renderCreateModal()}
       {renderJoinModal()}
+      {renderRenameModal()}
 
       {/* Modal code généré */}
       <Modal visible={inviteModal} transparent animationType="fade">
@@ -403,6 +469,36 @@ export default function FoyerScreen() {
               {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnText}>Créer</Text>}
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setCreateModal(false)} style={styles.cancelBtn}>
+              <Text style={[styles.cancelText, { color: theme.subtext }]}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  function renderRenameModal() {
+    return (
+      <Modal visible={renameModal} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={[styles.modal, { backgroundColor: theme.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Renommer le foyer</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.bg, color: theme.text }]}
+              placeholder="Nouveau nom"
+              placeholderTextColor={theme.subtext}
+              value={renameInput}
+              onChangeText={setRenameInput}
+              autoFocus
+            />
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: theme.tint }]}
+              onPress={handleRename}
+              disabled={renaming}
+            >
+              {renaming ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnText}>Renommer</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setRenameModal(false)} style={styles.cancelBtn}>
               <Text style={[styles.cancelText, { color: theme.subtext }]}>Annuler</Text>
             </TouchableOpacity>
           </View>
@@ -476,7 +572,13 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 26, fontWeight: '900', marginBottom: 8 },
   heroSub:   { fontSize: 15, textAlign: 'center', lineHeight: 22, paddingHorizontal: 24 },
 
-  pageTitle: { fontSize: 26, fontWeight: '900', marginBottom: 24 },
+  pageTitle: { fontSize: 26, fontWeight: '900', marginBottom: 4 },
+  pageSub:   { fontSize: 12, marginBottom: 20 },
+
+  // Swipe actions
+  swipeLeft:  { backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', width: 90, borderRadius: 16, marginBottom: 16 },
+  swipeRight: { backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', width: 90, borderRadius: 16, marginBottom: 16 },
+  swipeLabel: { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: 4 },
 
   // Carte foyer
   foyerCard:    { borderRadius: 16, marginBottom: 16 },
